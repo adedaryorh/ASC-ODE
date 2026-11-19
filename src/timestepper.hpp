@@ -9,20 +9,23 @@
 
 namespace ASC_ode
 {
-  
+
+  // base class of all time-stepping methods for y' = rhs(y)
   class TimeStepper
-  { 
+  {
   protected:
     std::shared_ptr<NonlinearFunction> m_rhs;
   public:
     TimeStepper(std::shared_ptr<NonlinearFunction> rhs) : m_rhs(rhs) {}
     virtual ~TimeStepper() = default;
+    // advances y by one time-step tau
     virtual void doStep(double tau, VectorView<double> y) = 0;
   };
 
+  // y_{n+1} = y_n + tau f(y_n)
   class ExplicitEuler : public TimeStepper
   {
-    Vector<> m_vecf;
+    Vector<> m_vecf;   // allocated once, not in every step
   public:
     ExplicitEuler(std::shared_ptr<NonlinearFunction> rhs) 
     : TimeStepper(rhs), m_vecf(rhs->dimF()) {}
@@ -33,6 +36,8 @@ namespace ASC_ode
     }
   };
 
+  // solves y - y_n - tau f(y) = 0 with Newton's method. The equation is built once
+  // by the function algebra, y_n and tau are updated in every step.
   class ImplicitEuler : public TimeStepper
   {
     std::shared_ptr<NonlinearFunction> m_equ;

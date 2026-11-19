@@ -11,6 +11,8 @@ namespace ASC_ode
 {
   using namespace nanoblas;
 
+  // A function f : R^dimX -> R^dimF, which can evaluate its value and its Jacobi matrix.
+  // Arguments are views, so f can write into parts of larger vectors and matrices.
   class NonlinearFunction
   {
   public:
@@ -22,6 +24,9 @@ namespace ASC_ode
   };
 
 
+  // building blocks of the function algebra:
+
+  // f(x) = x
   class IdentityFunction : public NonlinearFunction
   {
     size_t m_n;
@@ -43,6 +48,7 @@ namespace ASC_ode
 
 
 
+  // f(x) = val, the value can be changed with set()
   class ConstantFunction : public NonlinearFunction
   {
     Vector<> m_val;
@@ -65,6 +71,7 @@ namespace ASC_ode
 
   
   
+  // f(x) = faca fa(x) + facb fb(x)
   class SumFunction : public NonlinearFunction
   {
     std::shared_ptr<NonlinearFunction> m_fa, m_fb;
@@ -96,6 +103,7 @@ namespace ASC_ode
   };
 
 
+  // operators to build expressions like  ynew - yold - tau * rhs
   inline auto operator- (std::shared_ptr<NonlinearFunction> fa, std::shared_ptr<NonlinearFunction> fb)
   {
     return std::make_shared<SumFunction>(fa, fb, 1, -1);
@@ -106,6 +114,7 @@ namespace ASC_ode
     return std::make_shared<SumFunction>(fa, fb, 1, 1);
   }
 
+  // a scalar, which can be changed after the expression is built (e.g. the time-step)
   class Parameter 
   {
     double m_value;
@@ -115,6 +124,7 @@ namespace ASC_ode
     void set(double value) { m_value = value; }
   };
 
+  // f(x) = fac fa(x)
   class ScaleFunction : public NonlinearFunction
   {
     std::shared_ptr<NonlinearFunction> m_fa;
@@ -153,7 +163,7 @@ namespace ASC_ode
 
 
 
-  // fa(fb)
+  // f(x) = fa(fb(x)), the derivative by the chain rule
   class ComposeFunction : public NonlinearFunction
   {
     std::shared_ptr<NonlinearFunction> m_fa, m_fb;
@@ -188,9 +198,11 @@ namespace ASC_ode
   
   inline auto Compose (std::shared_ptr<NonlinearFunction> fa, std::shared_ptr<NonlinearFunction> fb)
   {
-    return make_shared<ComposeFunction> (fa, fb);
+    return std::make_shared<ComposeFunction> (fa, fb);
   }
   
+  // fa acts on the entries [firstx, firstx+fa->dimX()) of x, and writes into
+  // the entries [firstf, firstf+fa->dimF()) of f, all other entries are zero
   class EmbedFunction : public NonlinearFunction
   {
     std::shared_ptr<NonlinearFunction> m_fa;
@@ -221,6 +233,7 @@ namespace ASC_ode
   };
 
   
+  // keeps the entries [first, next) of x, sets the others to zero
   class Projector : public NonlinearFunction
   {
     size_t m_size, m_first, m_next;

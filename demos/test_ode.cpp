@@ -1,5 +1,6 @@
 #include <iostream>
-#include <fstream> 
+#include <fstream>
+#include <numbers>
 
 #include <nonlinfunc.hpp>
 #include <timestepper.hpp>
@@ -36,7 +37,7 @@ public:
 
 int main()
 {
-  double tend = 4*M_PI;
+  double tend = 4*std::numbers::pi;
   int steps = 100;
   double tau = tend/steps;
 
