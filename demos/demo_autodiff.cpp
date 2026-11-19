@@ -9,7 +9,6 @@ template <typename T>
 T func1 (T x, T y)
 {
   return x * sin(y);
-  // return 1e6 + y;
 }
 
 
@@ -42,6 +41,7 @@ int main()
     // func'' = 2
     std::cout << "addx*addx = " << addx * addx << std::endl;
 
+    // sin(addx) needs cos for AutoDiff, which is an exercise:
     // std::cout << "sin(addx) = " << sin(addx) << std::endl;
   }
   return 0;

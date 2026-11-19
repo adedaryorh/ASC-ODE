@@ -1,14 +1,20 @@
 #ifndef Newton_h
 #define Newton_h
 
+#include <functional>
+#include <stdexcept>
+
 #include "nonlinfunc.hpp"
 #include <inverse.hpp>
 
 namespace ASC_ode
-{  
-  void NewtonSolver (std::shared_ptr<NonlinearFunction> func, VectorView<double> x,
-                     double tol = 1e-10, int maxsteps = 10,
-                     std::function<void(int,double,VectorView<double>)> callback = nullptr)
+{
+  // Newton's method for func(x) = 0: x is the initial guess, and returns the solution.
+  // Throws if not converged within maxsteps.
+  // inline: a non-template function defined in a header, included by several .cpp files
+  inline void NewtonSolver (std::shared_ptr<NonlinearFunction> func, VectorView<double> x,
+                            double tol = 1e-10, int maxsteps = 10,
+                            std::function<void(int,double,VectorView<double>)> callback = nullptr)
   {
     Vector<double> res(func->dimF());
     Matrix<double> fprime(func->dimF(), func->dimX());
@@ -24,10 +30,6 @@ namespace ASC_ode
         calcInverse(fprime);
         x -= fprime*res;
 
-        // LapackLU LU(fprime);
-        // LU.solve(res);
-        // x -= res;
- 
         if (callback)
           callback(i, err, x);
       }
