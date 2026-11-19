@@ -216,7 +216,7 @@ namespace ASC_ode
     {
       df = 0;
       m_fa->evaluateDeriv(x.range(m_firstx, m_nextx),
-                        df.rows(m_firstf, m_nextf).cols(m_firstx, m_nextx));
+                        df.rowRange(m_firstf, m_nextf).colRange(m_firstx, m_nextx));
     }
   };
 
@@ -269,7 +269,7 @@ namespace ASC_ode
       df = 0.0;
       for (size_t i = 0; i < num; i++)
         func->evaluateDeriv(x.range(i*fdimx, (i+1)*fdimx),
-                            df.rows(i*fdimf, (i+1)*fdimf).cols(i*fdimx, (i+1)*fdimx));
+                            df.rowRange(i*fdimf, (i+1)*fdimf).colRange(i*fdimx, (i+1)*fdimx));
     }
   };
 
@@ -295,7 +295,7 @@ namespace ASC_ode
       df = 0.0;
       for (size_t i = 0; i < m_a.rows(); i++)
         for (size_t j = 0; j < m_a.cols(); j++)
-          df.rows(i*m_n, (i+1)*m_n).cols(j*m_n, (j+1)*m_n).diag() = m_a(i,j);
+          df.rowRange(i*m_n, (i+1)*m_n).colRange(j*m_n, (j+1)*m_n).diag() = m_a(i,j);
     }
   };
 
