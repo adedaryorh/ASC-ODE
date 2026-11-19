@@ -216,7 +216,7 @@ namespace ASC_ode
     {
       df = 0;
       m_fa->evaluateDeriv(x.range(m_firstx, m_nextx),
-                        df.rows(m_firstf, m_nextf).cols(m_firstx, m_nextx));
+                        df.rowRange(m_firstf, m_nextf).colRange(m_firstx, m_nextx));
     }
   };
 
