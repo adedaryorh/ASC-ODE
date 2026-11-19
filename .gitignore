@@ -33,7 +33,7 @@
 
 
 build
-mass_spring/.ipynb_checkpoints
+.ipynb_checkpoints
 .vscode
 
 docs/_build
