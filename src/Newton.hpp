@@ -3,7 +3,6 @@
 
 #include "nonlinfunc.hpp"
 #include <inverse.hpp>
-#include <lapack_interface.hpp>
 
 namespace ASC_ode
 {  
