@@ -1,15 +1,18 @@
 #ifndef IMPLICITRK_HPP
 #define IMPLICITRK_HPP
 
-#include <vector.hpp>
-#include <matrix.hpp>
+#include <cmath>
+#include <stdexcept>
+#include <tuple>
+
+#include "timestepper.hpp"
 #include <inverse.hpp>
 
 namespace ASC_ode {
   using namespace nanoblas;
 
-
-
+  // Runge-Kutta method for the Butcher tableau (a, b, c). The equation for the
+  // stage slopes k is built by the function algebra and solved by Newton's method.
   class ImplicitRungeKutta : public TimeStepper
   {
     Matrix<> m_a;
@@ -27,7 +30,7 @@ namespace ASC_ode {
     m_tau(std::make_shared<Parameter>(0.0)),
     m_stages(c.size()), m_n(rhs->dimX()), m_k(m_stages*m_n), m_y(m_stages*m_n)
     {
-      auto multiple_rhs = make_shared<MultipleFunc>(rhs, m_stages);
+      auto multiple_rhs = std::make_shared<MultipleFunc>(rhs, m_stages);
       m_yold = std::make_shared<ConstantFunction>(m_stages*m_n);
       auto knew = std::make_shared<IdentityFunction>(m_stages*m_n);
       m_equ = knew - Compose(multiple_rhs, m_yold+m_tau*std::make_shared<MatVecFunc>(a, m_n));
@@ -49,23 +52,20 @@ namespace ASC_ode {
   };
 
 
+// Butcher tableau of the 2-stage Gauss-Legendre method
+// (inline: variables and functions defined in a header, included by several .cpp files)
+inline Matrix<double> Gauss2a { { 0.25, 0.25 - sqrt(3)/6 }, { 0.25 + sqrt(3)/6, 0.25 } };
+inline Vector<> Gauss2b { 0.5, 0.5 };
+inline Vector<> Gauss2c { 0.5 - sqrt(3)/6, 0.5 + sqrt(3)/6 };
 
-
-
-
-
-Matrix<double> Gauss2a { { 0.25, 0.25 - sqrt(3)/6 }, { 0.25 + sqrt(3)/6, 0.25 } };
-Vector<> Gauss2b { 0.5, 0.5 };
-Vector<> Gauss2c { 0.5 - sqrt(3)/6, 0.5 + sqrt(3)/6 };
-
-
-Vector<> Gauss3c { 0.5 - sqrt(15)/10, 0.5, 0.5+sqrt(15)/10 };
+// nodes of the 3-stage Gauss-Legendre method, a and b follow from computeABfromC
+inline Vector<> Gauss3c { 0.5 - sqrt(15)/10, 0.5, 0.5+sqrt(15)/10 };
 
 
 // codes from Numerical Recipes, https://numerical.recipes/book.html
 
 // Gauss integration on [0,1]
-void GaussLegendre(VectorView<> x, VectorView<> w)
+inline void GaussLegendre(VectorView<> x, VectorView<> w)
 // Given the lower and upper limits of integration x1 and x2, this routine returns arrays x[0..n-1]
 // and w[0..n-1] of length n, containing the abscissas and weights of the Gauss-Legendre n-point
 // quadrature formula.
@@ -95,7 +95,7 @@ void GaussLegendre(VectorView<> x, VectorView<> w)
         pp=n*(z*p1-p2)/(z*z-1.0);
         z1=z;
         z=z1-p1/pp;   // Newton’s method.
-      } while (abs(z-z1) > EPS);
+      } while (std::abs(z-z1) > EPS);
       x[i]=xm-xl*z;      // Scale the root to the desired interval,
       x[n-1-i]=xm+xl*z;  //  and put in its symmetric counterpart.
       w[i]=2.0*xl/((1.0-z*z)*pp*pp);  // Compute the weight
@@ -104,7 +104,7 @@ void GaussLegendre(VectorView<> x, VectorView<> w)
   }
 
 
-void GaussJacobi (VectorView<> x, VectorView<> w, const double alf, const double bet)
+inline void GaussJacobi (VectorView<> x, VectorView<> w, const double alf, const double bet)
 // Given alf and bet, the parameters ˛ and ˇ of the Jacobi polynomials, this routine returns
 // arrays x[0..n-1] and w[0..n-1] containing the abscissas and weights of the n-point GaussJacobi quadrature formula. The largest abscissa is returned in x[0], the smallest in x[n-1].
 {
@@ -124,7 +124,7 @@ void GaussJacobi (VectorView<> x, VectorView<> w, const double alf, const double
     } else if (i == 1) { // Initial guess for the second largest root.
       r1=(4.1+alf)/((1.0+alf)*(1.0+0.156*alf));
       r2=1.0+0.06*(n-8.0)*(1.0+0.12*alf)/n;
-      r3=1.0+0.012*bet*(1.0+0.25*abs(alf))/n;
+      r3=1.0+0.012*bet*(1.0+0.25*std::abs(alf))/n;
       z -= (1.0-z)*r1*r2*r3;
     } else if (i == 2) { // Initial guess for the third largest root.
       r1=(1.67+0.28*alf)/(1.0+0.37*alf);
@@ -164,9 +164,9 @@ void GaussJacobi (VectorView<> x, VectorView<> w, const double alf, const double
       //  a standard relation involving also p2, the polynomial of one lower order.
       z1=z;
       z=z1-p1/pp; // Newton’s formula.
-      if (abs(z-z1) <= EPS) break;
+      if (std::abs(z-z1) <= EPS) break;
     }
-    if (its > MAXIT) throw("too many iterations in gaujac");
+    if (its > MAXIT) throw std::runtime_error("too many iterations in gaujac");
     x[i]=z;    // Store the root and the weight.
     w[i]=exp(std::lgamma(alf+n)+std::lgamma(bet+n)-std::lgamma(n+1.0)-
              std::lgamma(n+alfbet+1.0))*temp*pow(2.0,alfbet)/(pp*p2);
@@ -178,7 +178,7 @@ void GaussJacobi (VectorView<> x, VectorView<> w, const double alf, const double
 /*
   given Runge-Kutta nodes c, compute the coefficients a and b
 */
-auto computeABfromC (const Vector<> & c)
+inline auto computeABfromC (const Vector<> & c)
 {
   int s = c.size();
   Matrix<> M(s, s);
@@ -189,7 +189,6 @@ auto computeABfromC (const Vector<> & c)
       M(i,j) = std::pow(c(j), i);
 
   calcInverse(M);
-  // M = LapackLU(M).inverse();
   
   for (int i = 0; i < s; i++)
     tmp(i) = 1.0 / (i+1);
@@ -203,28 +202,31 @@ auto computeABfromC (const Vector<> & c)
         tmp(i) = std::pow(c(j),i+1) / (i+1);
       a.row(j) = M * tmp;
     }
-  /*
-  std::cout << "b = " << b << std::endl;
-  std::cout << "a = " << a << std::endl;
-  */
   return std::tuple { a, b };
 }
   
 
-void GaussRadau (VectorView<> x, VectorView<> w)
+// Radau points and weights on [0,1], in ascending order, the last point is 1.
+// The other points are the roots of the Jacobi polynomial P^(1,0), from GaussJacobi.
+inline void GaussRadau (VectorView<> x, VectorView<> w)
 {
-  GaussJacobi (x.range(0, x.size()-1),
-               w.range(0, w.size()-1), 1, 0);
-  for (int i = 0; i < x.size()-1; i++)
+  size_t n = x.size()-1;
+  GaussJacobi (x.range(0, n), w.range(0, n), 1, 0);
+  for (size_t i = 0; i < n; i++)
     {
+      w(i) *= 0.5 / (1-x(i));   // divide out the Jacobi weight (1-x), scale to [0,1]
       x(i) = 0.5*(x(i)+1);
-      w(i) *= 0.5;
     }
-  x(x.size()-1) = 1.0;
+  for (size_t i = 0; i < n/2; i++)   // GaussJacobi returns the largest root first
+    {
+      std::swap(x(i), x(n-1-i));
+      std::swap(w(i), w(n-1-i));
+    }
+  x(n) = 1.0;
   double sum = 0;
-  for (int i = 0; i < x.size()-1; i++)
+  for (size_t i = 0; i < n; i++)
     sum += w(i);
-  w(x.size()-1) = 1-sum;
+  w(n) = 1-sum;
 }
 }
 
