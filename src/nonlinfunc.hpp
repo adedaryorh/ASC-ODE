@@ -282,8 +282,8 @@ namespace ASC_ode
     MatVecFunc (Matrix<> a, size_t n)
       : m_a(a), m_n(n) { }
 
-    virtual size_t dimX() const override { return m_n*m_a.rows(); } 
-    virtual size_t dimF() const override { return m_n*m_a.cols(); }
+    virtual size_t dimX() const override { return m_n*m_a.cols(); }
+    virtual size_t dimF() const override { return m_n*m_a.rows(); }
     virtual void evaluate (VectorView<double> x, VectorView<double> f) const override
     {
       MatrixView<double> mx(m_a.cols(), m_n, m_n, x.data());
