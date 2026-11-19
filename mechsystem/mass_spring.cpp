@@ -16,7 +16,7 @@ int main()
 
 
   double tend = 10;
-  double steps = 1000;
+  int steps = 1000;
 
   Vector<> x(2*mss.masses().size());
   Vector<> dx(2*mss.masses().size());

@@ -1,5 +1,4 @@
 import sys
-sys.path.append('/Users/joachim/texjs/lva/IntroSC/ASC-ODE/build/mechsystem')
 sys.path.append('../build/mechsystem')
 
 from mass_spring import *

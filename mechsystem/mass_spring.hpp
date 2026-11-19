@@ -29,6 +29,7 @@ public:
 };
 
 
+// refers to a fix or a mass, by its type and index
 class Connector
 {
 public:
@@ -37,7 +38,7 @@ public:
   size_t nr;
 };
 
-std::ostream & operator<< (std::ostream & ost, const Connector & con)
+inline std::ostream & operator<< (std::ostream & ost, const Connector & con)
 {
   ost << "type = " << int(con.type) << ", nr = " << con.nr;
   return ost;
@@ -132,6 +133,7 @@ std::ostream & operator<< (std::ostream & ost, MassSpringSystem<D> & mss)
 }
 
 
+// right-hand side for the Newmark solvers: the accelerations M^{-1} F(x) of all masses
 template <int D>
 class MSS_Function : public NonlinearFunction
 {
@@ -180,7 +182,7 @@ public:
   
   virtual void evaluateDeriv (VectorView<double> x, MatrixView<double> df) const override
   {
-    // TODO: exact differentiation
+    // numerical differentiation, the exact derivative is an exercise
     double eps = 1e-8;
     Vector<> xl(dimX()), xr(dimX()), fl(dimF()), fr(dimF());
     for (size_t i = 0; i < dimX(); i++)

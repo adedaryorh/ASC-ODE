@@ -100,7 +100,7 @@ PYBIND11_MODULE(mass_spring, m) {
       .def_property_readonly("masses", [](MassSpringSystem<3> & mss) -> auto& { return mss.masses(); })
       .def_property_readonly("fixes", [](MassSpringSystem<3> & mss) -> auto& { return mss.fixes(); })
       .def_property_readonly("springs", [](MassSpringSystem<3> & mss) -> auto& { return mss.springs(); })
-      .def("__getitem__", [](MassSpringSystem<3> mss, Connector & c) {
+      .def("__getitem__", [](MassSpringSystem<3> & mss, Connector & c) {
         if (c.type==Connector::FIX) return py::cast(mss.fixes()[c.nr]);
         else return py::cast(mss.masses()[c.nr]);
       })
