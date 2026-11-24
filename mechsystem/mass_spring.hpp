@@ -52,12 +52,15 @@ public:
   std::array<Connector,2> connectors;
 };
 
+struct DistanceConstraint { double length; std::array<Connector,2> connectors; };
+
 template <int D>
 class MassSpringSystem
 {
   std::vector<Fix<D>> m_fixes;
   std::vector<Mass<D>> m_masses;
   std::vector<Spring> m_springs;
+  std::vector<DistanceConstraint> m_constraints;
   Vec<D> m_gravity=0.0;
 public:
   void setGravity (Vec<D> gravity) { m_gravity = gravity; }
@@ -81,15 +84,20 @@ public:
     return m_springs.size()-1;
   }
 
+  size_t addConstraint(DistanceConstraint c) {
+    m_constraints.push_back(c);
+    return m_constraints.size()-1;
+  }
+  const auto& constraints() const { return m_constraints; }
   auto & fixes() { return m_fixes; } 
   auto & masses() { return m_masses; } 
   auto & springs() { return m_springs; }
 
   void getState (VectorView<> values, VectorView<> dvalues, VectorView<> ddvalues)
   {
-    auto valmat = values.asMatrix(m_masses.size(), D);
-    auto dvalmat = dvalues.asMatrix(m_masses.size(), D);
-    auto ddvalmat = ddvalues.asMatrix(m_masses.size(), D);
+    auto valmat = values.range(0,D*m_masses.size()).asMatrix(m_masses.size(), D);
+    auto dvalmat = dvalues.range(0,D*m_masses.size()).asMatrix(m_masses.size(), D);
+    auto ddvalmat = ddvalues.range(0,D*m_masses.size()).asMatrix(m_masses.size(), D);
 
     for (size_t i = 0; i < m_masses.size(); i++)
       {
@@ -101,9 +109,9 @@ public:
 
   void setState (VectorView<> values, VectorView<> dvalues, VectorView<> ddvalues)
   {
-    auto valmat = values.asMatrix(m_masses.size(), D);
-    auto dvalmat = dvalues.asMatrix(m_masses.size(), D);
-    auto ddvalmat = ddvalues.asMatrix(m_masses.size(), D);
+    auto valmat = values.range(0,D*m_masses.size()).asMatrix(m_masses.size(), D);
+    auto dvalmat = dvalues.range(0,D*m_masses.size()).asMatrix(m_masses.size(), D);
+    auto ddvalmat = ddvalues.range(0,D*m_masses.size()).asMatrix(m_masses.size(), D);
 
     for (size_t i = 0; i < m_masses.size(); i++)
       {
@@ -138,65 +146,73 @@ template <int D>
 class MSS_Function : public NonlinearFunction
 {
   MassSpringSystem<D> & mss;
+  size_t physical() const { return D*mss.masses().size(); }
+  Vec<D> point(Connector c,VectorView<double> x) const {
+    if(c.type==Connector::FIX) return mss.fixes()[c.nr].pos;
+    return Vec<D>(x.range(D*c.nr,D*(c.nr+1)));
+  }
 public:
-  MSS_Function (MassSpringSystem<D> & _mss)
-    : mss(_mss) { }
-
-  virtual size_t dimX() const override { return D*mss.masses().size(); }
-  virtual size_t dimF() const override{ return D*mss.masses().size(); }
-
-  virtual void evaluate (VectorView<double> x, VectorView<double> f) const override
-  {
-    f = 0.0;
-
-    auto xmat = x.asMatrix(mss.masses().size(), D);
-    auto fmat = f.asMatrix(mss.masses().size(), D);
-
-    for (size_t i = 0; i < mss.masses().size(); i++)
-      fmat.row(i) = mss.masses()[i].mass*mss.getGravity();
-
-    for (auto spring : mss.springs())
-      {
-        auto [c1,c2] = spring.connectors;
-        Vec<D> p1, p2;
-        if (c1.type == Connector::FIX)
-          p1 = mss.fixes()[c1.nr].pos;
-        else
-          p1 = xmat.row(c1.nr);
-        if (c2.type == Connector::FIX)
-          p2 = mss.fixes()[c2.nr].pos;
-        else
-          p2 = xmat.row(c2.nr);
-
-        double force = spring.stiffness * (norm(p1-p2)-spring.length);
-        Vec<D> dir12 = 1.0/norm(p1-p2) * (p2-p1);
-        if (c1.type == Connector::MASS)
-          fmat.row(c1.nr) += force*dir12;
-        if (c2.type == Connector::MASS)
-          fmat.row(c2.nr) -= force*dir12;
+  explicit MSS_Function(MassSpringSystem<D>& system) : mss(system) {}
+  size_t dimX() const override { return physical()+mss.constraints().size(); }
+  size_t dimF() const override { return dimX(); }
+  void evaluate(VectorView<double> x,VectorView<double> f) const override {
+    f=0.;
+    for(size_t i=0;i<mss.masses().size();i++)
+      f.range(D*i,D*(i+1))=mss.getGravity();
+    auto apply=[&](auto ends, const Vec<D>& force) {
+      for(int e=0;e<2;e++) {
+        auto c=ends[e];
+        if(c.type==Connector::MASS)
+          f.range(D*c.nr,D*(c.nr+1))+=((e==0?1.:-1.)/mss.masses()[c.nr].mass)*force;
       }
-
-    for (size_t i = 0; i < mss.masses().size(); i++)
-      fmat.row(i) *= 1.0/mss.masses()[i].mass;
+    };
+    for(auto& sp:mss.springs()) {
+      auto ends=sp.connectors;
+      Vec<D> delta=point(ends[1],x)-point(ends[0],x);
+      double length=norm(delta);
+      if(length==0) throw std::domain_error("Spring endpoints coincide");
+      apply(ends,Vec<D>((sp.stiffness*(1-sp.length/length))*delta));
+    }
+    for(size_t i=0;i<mss.constraints().size();i++) {
+      auto c=mss.constraints()[i]; auto ends=c.connectors;
+      Vec<D> delta=point(ends[1],x)-point(ends[0],x);
+      f(physical()+i)=(norm(delta)*norm(delta))-c.length*c.length;
+      apply(ends,Vec<D>((-2*x(physical()+i))*delta));
+    }
   }
-  
-  virtual void evaluateDeriv (VectorView<double> x, MatrixView<double> df) const override
-  {
-    // numerical differentiation, the exact derivative is an exercise
-    double eps = 1e-8;
-    Vector<> xl(dimX()), xr(dimX()), fl(dimF()), fr(dimF());
-    for (size_t i = 0; i < dimX(); i++)
-      {
-        xl = x;
-        xl(i) -= eps;
-        xr = x;
-        xr(i) += eps;
-        evaluate (xl, fl);
-        evaluate (xr, fr);
-        df.col(i) = 1/(2*eps) * (fr-fl);
+  void evaluateDeriv(VectorView<double> x,MatrixView<double> df) const override {
+    df=0.;
+    auto blocks=[&](auto ends,auto stiffness) {
+      for(int e=0;e<2;e++) for(int b=0;b<2;b++) {
+        auto row=ends[e],col=ends[b];
+        if(row.type!=Connector::MASS || col.type!=Connector::MASS) continue;
+        double scale=(e==b?-1.:1.)/mss.masses()[row.nr].mass;
+        for(int i=0;i<D;i++) for(int j=0;j<D;j++)
+          df(D*row.nr+i,D*col.nr+j)+=scale*stiffness(i,j);
       }
+    };
+    for(auto& spring:mss.springs()) {
+      auto ends=spring.connectors;
+      Vec<D> delta=point(ends[1],x)-point(ends[0],x);
+      double r=norm(delta);
+      if(r==0) throw std::domain_error("Spring endpoints coincide");
+      blocks(ends,[&](int i,int j){
+        return spring.stiffness*((1-spring.length/r)*(i==j)+spring.length*delta(i)*delta(j)/(r*r*r));
+      });
+    }
+    for(size_t n=0;n<mss.constraints().size();n++) {
+      auto ends=mss.constraints()[n].connectors;
+      size_t row=physical()+n;
+      Vec<D> delta=point(ends[1],x)-point(ends[0],x);
+      blocks(ends,[&](int i,int j){return -2*x(row)*(i==j);});
+      for(int e=0;e<2;e++) if(ends[e].type==Connector::MASS) {
+        auto m=ends[e].nr;
+        for(int i=0;i<D;i++) {
+          double g=(e==0?-2.:2.)*delta(i);
+          df(row,D*m+i)+=g; df(D*m+i,row)+=g/mss.masses()[m].mass;
+        }
+      }
+    }
   }
-  
 };
-
 #endif
