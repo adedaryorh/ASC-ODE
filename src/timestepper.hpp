@@ -63,6 +63,38 @@ namespace ASC_ode
 
   
 
+  class ImprovedEuler : public TimeStepper {
+    Vector<> midpoint, slope;
+  public:
+    explicit ImprovedEuler(std::shared_ptr<NonlinearFunction> rhs)
+      : TimeStepper(rhs), midpoint(rhs->dimX()), slope(rhs->dimF()) {}
+    void doStep(double tau, VectorView<> y) override {
+      m_rhs->evaluate(y, slope);
+      midpoint = y + (0.5*tau)*slope;
+      m_rhs->evaluate(midpoint, slope);
+      y += tau*slope;
+    }
+  };
+
+  class CrankNicolson : public TimeStepper {
+    std::shared_ptr<Parameter> halfstep;
+    std::shared_ptr<ConstantFunction> base;
+    std::shared_ptr<NonlinearFunction> equation;
+    Vector<> slope;
+  public:
+    explicit CrankNicolson(std::shared_ptr<NonlinearFunction> rhs)
+      : TimeStepper(rhs), halfstep(std::make_shared<Parameter>(0.)),
+        base(std::make_shared<ConstantFunction>(rhs->dimX())), slope(rhs->dimF()) {
+      equation = std::make_shared<IdentityFunction>(rhs->dimX()) - base - halfstep*rhs;
+    }
+    void doStep(double tau, VectorView<> y) override {
+      m_rhs->evaluate(y, slope);
+      base->get() = y + (0.5*tau)*slope;
+      halfstep->set(0.5*tau);
+      NewtonSolver(equation,y);
+    }
+  };
+
 }
 
 
